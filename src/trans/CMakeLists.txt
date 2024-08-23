@@ -46,9 +46,7 @@ if( NOT HAVE_FFTW )
 endif()
 
 
-if( HAVE_EPYGRAM )
-	ecbuild_list_add_pattern( LIST trans_src  GLOB ${CMAKE_SOURCE_DIR}/src/py_interface/* )
-endif()
+ecbuild_list_add_pattern( LIST ectrans4py_src  GLOB ${CMAKE_SOURCE_DIR}/src/ectrans4py/py_interface/* )
 
 
 set( HAVE_dp ${HAVE_DOUBLE_PRECISION} )
@@ -60,7 +58,7 @@ foreach( prec sp dp )
     ecbuild_add_library(
       TARGET           trans_${prec}
       LINKER_LANGUAGE  Fortran
-      SOURCES          ${trans_src}
+      SOURCES          ${trans_src}    ${ectrans4py_src}
       PUBLIC_INCLUDES  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/ectrans>
                        $<INSTALL_INTERFACE:include/ectrans>

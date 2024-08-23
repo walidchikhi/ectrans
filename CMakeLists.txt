@@ -23,7 +23,7 @@ ecbuild_add_option( FEATURE MPI
                     CONDITION fiat_HAVE_MPI )
 
 ecbuild_add_option( FEATURE OMP
-                    DEFAULT ON
+                    DEFAULT OFF
                     DESCRIPTION "Support for OpenMP shared memory parallelism"
                     REQUIRED_PACKAGES "OpenMP COMPONENTS Fortran" )
 
@@ -34,10 +34,6 @@ ecbuild_add_option( FEATURE DOUBLE_PRECISION
 ecbuild_add_option( FEATURE SINGLE_PRECISION
                     DEFAULT ON
                     DESCRIPTION "Support for Single Precision" )
-
-ecbuild_add_option( FEATURE EPYGRAM
-                    DEFAULT ON
-		    DESCRIPTION "Add Wrappers for Epygram " )
 
 if( HAVE_SINGLE_PRECISION )
   set( single "single" )
