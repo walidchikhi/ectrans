@@ -1,0 +1,925 @@
+SUBROUTINE W_SPEC_SETUP(KRETURNCODE, KSIZEI, KSIZEJ, KPHYSICALSIZEI, KPHYSICALSIZEJ, &
+                       &KTRUNCX, KTRUNCY, KNUMMAXRESOL, KLOEN, LDLAM, &
+                       &KSIZEKLOEN, PDELTAX, PDELTAY, &
+                       &KIDENTRESOL, LDSTOP)
+! ** PURPOSE
+!    Setup spectral transform for LAM and global
+!
+! ** DUMMY ARGUMENTS
+!    KRETURNCODE: error code
+!    KSIZEI, KSIZEJ: size of grid-point field (with extension zone for LAM), put max size for KSIZEI in global
+!    KPHYSICALSIZEI, KPHYSICALSIZEJ: size of physical part of grid-point field for LAM (put 0 for global)
+!    KTRUNCX, KTRUNCY: troncatures for LAM (only KTRUNCX is used for global, put 0 for KTRUNCY)
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    KLOEN: number of points on each latitude row
+!    KSIZEKLOEN: size of KLOEN array
+!    PDELTAX: x resolution
+!    PDELTAY: y resolution
+!    LDLAM: LAM (.TRUE.) or global (.FALSE.)
+!    KIDENTRESOL: identification of resolution
+!    LDSTOP: exception raised?
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    6 Jan 2016, S. Riette: PDELTAX and PDELTAY added
+!    31 Jan 2019 R. El Khatib fix for single precision compilation
+!
+! I. Dummy arguments declaration
+USE PARKIND1, ONLY : JPRB
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER, INTENT(IN) :: KSIZEI, KSIZEJ
+INTEGER, INTENT(IN) :: KPHYSICALSIZEI, KPHYSICALSIZEJ
+INTEGER, INTENT(IN) :: KTRUNCX, KTRUNCY
+INTEGER, INTENT(IN) :: KNUMMAXRESOL
+INTEGER, DIMENSION(KSIZEKLOEN), INTENT(IN) :: KLOEN
+LOGICAL, INTENT(IN) :: LDLAM
+INTEGER, INTENT(IN) :: KSIZEKLOEN
+REAL(KIND=8), INTENT(IN) :: PDELTAX
+REAL(KIND=8), INTENT(IN) :: PDELTAY
+INTEGER, INTENT(OUT) :: KIDENTRESOL
+LOGICAL, INTENT(OUT) :: LDSTOP
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(2*KSIZEJ) :: ILOEN
+INTEGER :: JI
+LOGICAL, SAVE :: LLFIRSTCALL=.TRUE.
+LOGICAL :: LLNEWRESOL
+INTEGER, SAVE :: INBRESOL=0
+INTEGER(KIND=8) :: ICODEILOEN
+INTEGER, SAVE :: INUMMAXRESOLSAVE=-1
+INTEGER, DIMENSION(:), ALLOCATABLE, SAVE :: ITRUNCXSAVE, ITRUNCYSAVE, &
+                                            IPHYSICALSIZEISAVE, &
+                                            IPHYSICALSIZEJSAVE, &
+                                            ISIZEISAVE, ISIZEJSAVE, &
+                                            IIDENTRESOLSAVE
+INTEGER(KIND=8), DIMENSION(:), ALLOCATABLE, SAVE :: ILOENSAVE
+REAL(KIND=8), DIMENSION(:), ALLOCATABLE, SAVE :: ZDELTAXSAVE, &
+                                                        ZDELTAYSAVE
+REAL(KIND=8) :: ZEXWN, ZEYWN
+
+#include "setup_trans0.h"
+#include "esetup_trans.h"
+#include "setup_trans.h"
+
+KRETURNCODE=0
+LDSTOP=.FALSE.
+! III. Setup
+
+! III.a Setup LAM and global spectral transform - all resolutions
+! Maximum number of resolution is set now and cannot be change anymore
+IF (LLFIRSTCALL) THEN
+  !This code is called only once, whatever is the number of resolutions
+  CALL SETUP_TRANS0(KPRINTLEV=0, LDMPOFF=.TRUE., KMAX_RESOL=KNUMMAXRESOL)
+  ALLOCATE(ITRUNCXSAVE(KNUMMAXRESOL))
+  ALLOCATE(ITRUNCYSAVE(KNUMMAXRESOL))
+  ALLOCATE(IPHYSICALSIZEISAVE(KNUMMAXRESOL))
+  ALLOCATE(IPHYSICALSIZEJSAVE(KNUMMAXRESOL))
+  ALLOCATE(ISIZEJSAVE(KNUMMAXRESOL))
+  ALLOCATE(ISIZEISAVE(KNUMMAXRESOL))
+  ALLOCATE(ILOENSAVE(KNUMMAXRESOL))
+  ALLOCATE(IIDENTRESOLSAVE(KNUMMAXRESOL))
+  ALLOCATE(ZDELTAXSAVE(KNUMMAXRESOL))
+  ALLOCATE(ZDELTAYSAVE(KNUMMAXRESOL))
+  ITRUNCXSAVE=-1
+  ITRUNCYSAVE=-1
+  IPHYSICALSIZEISAVE=-1
+  IPHYSICALSIZEJSAVE=-1
+  ISIZEJSAVE=-1
+  ISIZEISAVE=-1
+  ILOENSAVE=-1
+  IIDENTRESOLSAVE=-1
+  ZDELTAXSAVE=-1.
+  ZDELTAXSAVE=-1.
+  LLFIRSTCALL=.FALSE.
+  INUMMAXRESOLSAVE=KNUMMAXRESOL
+ENDIF
+!
+! III.b Is-it a new resolution?
+LLNEWRESOL=.TRUE.
+IF(LDLAM) THEN
+  ILOEN(:)=KSIZEI
+ELSE
+  ILOEN(:)=0
+  ILOEN(1:MIN(SIZE(ILOEN),SIZE(KLOEN)))=KLOEN(1:MIN(SIZE(ILOEN),SIZE(KLOEN)))
+ENDIF
+ICODEILOEN=0
+DO JI=1, SIZE(ILOEN)
+  ICODEILOEN=ICODEILOEN+ILOEN(JI)*JI**4
+ENDDO
+DO JI=1, INBRESOL
+  IF (KTRUNCX==ITRUNCXSAVE(JI) .AND. KTRUNCY==ITRUNCYSAVE(JI) .AND. &
+   &KPHYSICALSIZEI==IPHYSICALSIZEISAVE(JI) .AND. &
+   &KPHYSICALSIZEJ==IPHYSICALSIZEJSAVE(JI) .AND. &
+   &KSIZEJ==ISIZEJSAVE(JI) .AND. KSIZEI==ISIZEISAVE(JI) .AND. &
+   &ICODEILOEN==ILOENSAVE(JI) .AND. &
+   &PDELTAX==ZDELTAXSAVE(JI) .AND. PDELTAY==ZDELTAYSAVE(JI)) THEN
+    KIDENTRESOL=IIDENTRESOLSAVE(JI)
+    LLNEWRESOL=.FALSE.
+  ENDIF
+ENDDO
+IF(LLNEWRESOL) THEN
+  INBRESOL=INBRESOL+1
+  IF(INBRESOL>INUMMAXRESOLSAVE) THEN
+    PRINT*, "Error in W_SPEC_SETUP: Maximum number of resolution is exceeded."
+    KRETURNCODE=-999
+    LDSTOP=.TRUE.
+  ENDIF
+ENDIF
+!
+! III.c Setup LAM or global spectral transform - once by resolution
+IF(LLNEWRESOL .AND. .NOT. LDSTOP) THEN
+  ! The following code is exectuded once for each resolution
+  ITRUNCXSAVE(INBRESOL)=KTRUNCX
+  ITRUNCYSAVE(INBRESOL)=KTRUNCY
+  IPHYSICALSIZEISAVE(INBRESOL)=KPHYSICALSIZEI
+  IPHYSICALSIZEJSAVE(INBRESOL)=KPHYSICALSIZEJ
+  ISIZEISAVE(INBRESOL)=KSIZEI
+  ISIZEJSAVE(INBRESOL)=KSIZEJ
+  ILOENSAVE(INBRESOL)=ICODEILOEN
+  ZDELTAXSAVE(INBRESOL)=PDELTAX
+  ZDELTAYSAVE(INBRESOL)=PDELTAY
+  IF(LDLAM) THEN
+    ZEXWN=2*3.141592653589797/(KSIZEI*PDELTAX)
+    ZEYWN=2*3.141592653589797/(KSIZEJ*PDELTAY)
+    CALL ESETUP_TRANS(KMSMAX=ITRUNCXSAVE(INBRESOL), KSMAX=ITRUNCYSAVE(INBRESOL), &
+                     &KDGUX=IPHYSICALSIZEJSAVE(INBRESOL), &
+                     &KDGL=ISIZEJSAVE(INBRESOL), KLOEN=ILOEN(:), KRESOL=IIDENTRESOLSAVE(INBRESOL), &
+                     &PEXWN=REAL(ZEXWN,KIND=JPRB), PEYWN=REAL(ZEYWN,KIND=JPRB))
+  ELSE
+    PRINT*, "Setup spectral transform"
+    CALL SETUP_TRANS(KSMAX=ITRUNCXSAVE(INBRESOL), KDGL=ISIZEJSAVE(INBRESOL), &
+                    &KLOEN=ILOEN(1:ISIZEJSAVE(INBRESOL)), KRESOL=IIDENTRESOLSAVE(INBRESOL))
+    PRINT*, "End Setup spectral transform"
+  ENDIF
+  KIDENTRESOL=IIDENTRESOLSAVE(INBRESOL)
+ENDIF
+END SUBROUTINE W_SPEC_SETUP
+
+!__________________________________________________________________________
+
+SUBROUTINE W_TRANS_INQ(KRETURNCODE, KSIZEJ, KTRUNC, KSLOEN, KLOEN, KNUMMAXRESOL, &
+                      &KGPTOT, KSPEC, KNMENG)
+! ** PURPOSE
+!    Simplified wrapper to TRANS_INQ
+!
+! ** DUMMY ARGUMENTS
+!    KSIZEJ: number of latitudes in grid-point space
+!    KTRUNC: troncature
+!    KSLOEN: Size of KLOEN
+!    KLOEN: number of points on each latitude row
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    KGPTOT: number of gridpoints
+!    KSPEC: number of spectral coefficients
+!    KNMENG: cut-off zonal wavenumber
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    6 Jan., S. Riette: w_spec_setup interfaced modified
+!
+! I. Dummy arguments declaration
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER(KIND=8), INTENT(IN) :: KSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KTRUNC
+INTEGER(KIND=8), INTENT(IN) :: KSLOEN
+INTEGER(KIND=8), DIMENSION(KSLOEN), INTENT(IN) :: KLOEN
+INTEGER(KIND=8), INTENT(IN) :: KNUMMAXRESOL
+INTEGER(KIND=8), INTENT(OUT) :: KGPTOT
+INTEGER(KIND=8), INTENT(OUT) :: KSPEC
+INTEGER(KIND=8), DIMENSION(KSLOEN), INTENT(OUT) :: KNMENG
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(SIZE(KLOEN)) :: ILOEN
+INTEGER :: ISIZEI, ISIZEJ, &
+         & IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+         & ITRUNCX, ITRUNCY, &
+         & INUMMAXRESOL
+LOGICAL :: LLSTOP
+INTEGER :: IIDENTRESOL
+INTEGER :: IGPTOT, ISPEC
+INTEGER, DIMENSION(SIZE(KLOEN)) :: INMENG
+REAL(KIND=8) :: ZDELTAX, ZDELTAY
+#include "trans_inq.h"
+
+ILOEN(:)=KLOEN(:)
+ISIZEI=0
+ISIZEJ=KSIZEJ
+IPHYSICALSIZEI=0
+IPHYSICALSIZEJ=0
+ITRUNCX=KTRUNC
+ITRUNCY=0
+INUMMAXRESOL=KNUMMAXRESOL
+INMENG(:)=KNMENG(:)
+!
+! III. Setup
+ZDELTAX=0.
+ZDELTAY=0.
+CALL W_SPEC_SETUP(KRETURNCODE, ISIZEI, ISIZEJ, IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+                  &ITRUNCX, ITRUNCY, INUMMAXRESOL, ILOEN, .FALSE., SIZE(ILOEN), &
+                  &ZDELTAX, ZDELTAY, IIDENTRESOL, LLSTOP)
+IF (.NOT. LLSTOP) THEN
+  CALL TRANS_INQ(KRESOL=IIDENTRESOL, KGPTOT=IGPTOT, KSPEC=ISPEC, KNMENG=INMENG)
+  KGPTOT=IGPTOT
+  KSPEC=ISPEC
+  KNMENG=INMENG
+ENDIF
+!
+END SUBROUTINE W_TRANS_INQ
+
+!___________________________________________________________________________________________
+
+SUBROUTINE W_ETRANS_INQ(KRETURNCODE, KSIZEI, KSIZEJ, KPHYSICALSIZEI, KPHYSICALSIZEJ, &
+                       &KTRUNCX, KTRUNCY, KNUMMAXRESOL, PDELTAX, PDELTAY, &
+                       &KGPTOT, KSPEC)
+! ** PURPOSE
+!    Simplified wrapper to ETRANS_INQ
+!
+! ** DUMMY ARGUMENTS
+!    KSIZEI, KSIZEJ: size of grid-point field (with extension zone)
+!    KPHYSICALSIZEI, KPHYSICALSIZEJ: size of physical part of grid-point field
+!    KTRUNCX, KTRUNCY: troncatures
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    PDELTAX: x resolution
+!    PDELTAY: y resolution
+!    KGPTOT: number of gridpoints
+!    KSPEC: number of spectral coefficients
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    6 Jan., S. Riette: PDELTAX and PDELTAY added
+!
+! I. Dummy arguments declaration
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER(KIND=8), INTENT(IN) :: KSIZEI, KSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KPHYSICALSIZEI, KPHYSICALSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KTRUNCX, KTRUNCY
+INTEGER(KIND=8), INTENT(IN) :: KNUMMAXRESOL
+REAL(KIND=8), INTENT(IN) :: PDELTAX
+REAL(KIND=8), INTENT(IN) :: PDELTAY
+INTEGER(KIND=8), INTENT(OUT) :: KGPTOT
+INTEGER(KIND=8), INTENT(OUT) :: KSPEC
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(0:KTRUNCX) :: IESM0
+INTEGER :: ISIZEI, ISIZEJ, &
+         & IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+         & ITRUNCX, ITRUNCY, &
+         & INUMMAXRESOL
+LOGICAL :: LLSTOP
+INTEGER :: IIDENTRESOL
+INTEGER, DIMENSION(1) :: ILOEN
+INTEGER :: IGPTOT, ISPEC
+
+#include "etrans_inq.h"
+
+ISIZEI=KSIZEI
+ISIZEJ=KSIZEJ
+IPHYSICALSIZEI=KPHYSICALSIZEI
+IPHYSICALSIZEJ=KPHYSICALSIZEJ
+ITRUNCX=KTRUNCX
+ITRUNCY=KTRUNCY
+INUMMAXRESOL=KNUMMAXRESOL
+
+! III. Setup
+CALL W_SPEC_SETUP(KRETURNCODE, ISIZEI, ISIZEJ, IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+                  &ITRUNCX, ITRUNCY, INUMMAXRESOL, ILOEN, .TRUE., 1, &
+                  &PDELTAX, PDELTAY, IIDENTRESOL, LLSTOP)
+IF (.NOT. LLSTOP) THEN
+  CALL ETRANS_INQ(KRESOL=IIDENTRESOL, KGPTOT=IGPTOT, KSPEC=ISPEC, KESM0=IESM0)
+  KGPTOT=IGPTOT
+  KSPEC=ISPEC
+ENDIF
+!
+END SUBROUTINE W_ETRANS_INQ
+
+!______________________________________________________________________
+
+SUBROUTINE W_SPEC2GPT_LAM(KRETURNCODE, KSIZEI, KSIZEJ, KPHYSICALSIZEI, KPHYSICALSIZEJ, &
+                         &KTRUNCX, KTRUNCY, KNUMMAXRESOL, KSIZE, LGRADIENT, LREORDER, PDELTAX, PDELTAY, &
+                         &PSPEC, PGPT, PGPTM, PGPTL)
+! ** PURPOSE
+!    Transform spectral coefficients into grid-point values
+!
+! ** DUMMY ARGUMENTS
+!    KRETURNCODE: error code
+!    KSIZEI, KSIZEJ: size of grid-point field (with extension zone)
+!    KPHYSICALSIZEI, KPHYSICALSIZEJ: size of physical part of grid-point field
+!    KTRUNCX, KTRUNCY: troncatures
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    KSIZE: size of PSPEC
+!    LREORDER: switch to reorder spectral coefficients or not
+!    LGRADIENT: switch to compute or not gradient
+!    PDELTAX: x resolution
+!    PDELTAY: y resolution
+!    PSPEC: spectral coefficient array
+!    PGPT: grid-point field
+!    PGPTM: N-S derivative if LGRADIENT
+!    PGPTL: E-W derivative if LGRADIENT
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    5 Jan., S. Riette: PDELTAX, PDELTAY, LGRADIENT, PGPTM and PGPTL added
+!    March, 2016, A.Mary: LREORDER
+!
+! I. Dummy arguments declaration
+USE PARKIND1, ONLY : JPRB
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER(KIND=8), INTENT(IN) :: KSIZEI, KSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KPHYSICALSIZEI, KPHYSICALSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KTRUNCX, KTRUNCY
+INTEGER(KIND=8), INTENT(IN) :: KNUMMAXRESOL
+INTEGER(KIND=8), INTENT(IN) :: KSIZE
+LOGICAL, INTENT(IN) :: LGRADIENT
+LOGICAL, INTENT(IN) :: LREORDER
+REAL(KIND=8), INTENT(IN) :: PDELTAX
+REAL(KIND=8), INTENT(IN) :: PDELTAY
+REAL(KIND=8), DIMENSION(KSIZE), INTENT(IN) :: PSPEC
+REAL(KIND=8), DIMENSION(KSIZEI*KSIZEJ), INTENT(OUT) :: PGPT
+REAL(KIND=8), DIMENSION(KSIZEI*KSIZEJ), INTENT(OUT) :: PGPTM
+REAL(KIND=8), DIMENSION(KSIZEI*KSIZEJ), INTENT(OUT) :: PGPTL
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(0:KTRUNCX) :: IESM0
+INTEGER :: IGPTOT, ISPEC
+INTEGER, DIMENSION(0:KTRUNCY) :: ISPECINI, ISPECEND
+REAL(KIND=8), DIMENSION(1, KSIZE) :: ZSPBUF
+REAL(KIND=JPRB), DIMENSION(KSIZEI*KSIZEJ, 3, 1) :: ZGPBUF
+INTEGER :: JI, JM, JN, IINDEX, IIDENTRESOL
+LOGICAL :: LLSTOP
+INTEGER :: ISIZEI, ISIZEJ, &
+         & IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+         & ITRUNCX, ITRUNCY, &
+         & INUMMAXRESOL
+INTEGER, DIMENSION(1) :: ILOEN
+
+#include "einv_trans.h"
+#include "etrans_inq.h"
+
+KRETURNCODE=0
+LLSTOP=.FALSE.
+ISIZEI=KSIZEI
+ISIZEJ=KSIZEJ
+IPHYSICALSIZEI=KPHYSICALSIZEI
+IPHYSICALSIZEJ=KPHYSICALSIZEJ
+ITRUNCX=KTRUNCX
+ITRUNCY=KTRUNCY
+INUMMAXRESOL=KNUMMAXRESOL
+ILOEN(:)=0
+
+! III. Setup
+CALL W_SPEC_SETUP(KRETURNCODE, ISIZEI, ISIZEJ, IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+                  &ITRUNCX, ITRUNCY, INUMMAXRESOL, ILOEN, .TRUE., 1, &
+                  &PDELTAX, PDELTAY, IIDENTRESOL, LLSTOP)
+
+! IV. Transformation
+
+! IV.a Shape of coefficient array
+!IGPTOT is the total number of points in grid-point space
+!ISPEC is the number of spectral coefficients
+!IESM0(m) is the index of spectral coefficient (m,0) in model
+!ISPECINI(n) is the index of the first of the 4 spectral coefficient (0,n) in FA file
+!ISPECEND(n) is the index of the last of the last 4 spectral coefficients (:,n) in FA file
+IF (.NOT. LLSTOP) THEN
+  CALL ETRANS_INQ(KRESOL=IIDENTRESOL, KGPTOT=IGPTOT, KSPEC=ISPEC, KESM0=IESM0)
+  JI=1
+  DO JN=0, ITRUNCY
+    ISPECINI(JN)=(JI-1)*4+1
+    JI=JI+COUNT(IESM0(1:ITRUNCX)-IESM0(0:ITRUNCX-1)>JN*4)
+    IF (ISPEC-IESM0(ITRUNCX)>JN*4) JI=JI+1
+    ISPECEND(JN)=(JI-1)*4
+  ENDDO
+ENDIF
+
+! III.b Reordering
+! reorder Aladin :  file ordering = coeffs per blocks of m, 4 reals per coeff
+!           Aladin array ordering = coeffs per blocks of n, 4 reals per coeff
+IF (LREORDER) THEN
+  IF (.NOT. LLSTOP) THEN
+    ZSPBUF(:,:)=0.
+    JI=1
+    DO JM=0,ITRUNCX+1
+      DO JN=0,ITRUNCY
+        IF (ISPECINI(JN)+JM*4+3<=ISPECEND(JN)) THEN
+          DO IINDEX=ISPECINI(JN)+JM*4, ISPECINI(JN)+JM*4+3
+            ZSPBUF(1,JI)=PSPEC(IINDEX)
+            JI=JI+1
+          ENDDO
+        ENDIF
+      ENDDO
+    ENDDO
+    IF (JI/=ISPEC+1) THEN
+      PRINT*, "Internal error in W_SPEC2GPT_LAM (spectral reordering)"
+      KRETURNCODE=-999
+      LLSTOP=.TRUE.
+    ENDIF
+  ENDIF
+ELSE
+  ZSPBUF(1,:) = PSPEC(:)
+ENDIF
+
+! III.c Inverse transform
+IF (.NOT. LLSTOP) THEN
+  IF (.NOT. LGRADIENT) THEN
+      CALL EINV_TRANS(PSPSCALAR=REAL(ZSPBUF(:,:),KIND=JPRB), PGP=ZGPBUF(:,:,:), KRESOL=IIDENTRESOL)
+      PGPT(:)=REAL(ZGPBUF(:,1,1),KIND=8)
+  ELSE
+      CALL EINV_TRANS(PSPSCALAR=REAL(ZSPBUF(:,:),KIND=JPRB), PGP=ZGPBUF(:,:,:), KRESOL=IIDENTRESOL, LDSCDERS=.TRUE.)
+      PGPT(:)=REAL(ZGPBUF(:,1,1),KIND=8)
+      PGPTM(:)=REAL(ZGPBUF(:,2,1),KIND=8)
+      PGPTL(:)=REAL(ZGPBUF(:,3,1),KIND=8)
+  ENDIF
+ENDIF
+
+END SUBROUTINE W_SPEC2GPT_LAM
+
+!____________________________________________________________________________
+
+SUBROUTINE W_SPEC2GPT_GAUSS(KRETURNCODE, KSIZEJ, KTRUNC, KNUMMAXRESOL, KGPTOT, KSLOEN, KLOEN, KSIZE, &
+                          & LGRADIENT, LREORDER, PSPEC, PGPT, PGPTM, PGPTL)
+! ** PURPOSE
+!    Transform spectral coefficients into grid-point values
+!
+! ** DUMMY ARGUMENTS
+!    KSIZEJ: Number of latitudes
+!    KTRUNC: troncature
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    KGPTOT: number of grid-points
+!    KSLOEN: Size of KLOEN
+!    KLOEN:
+!    KSIZE: Size of PSPEC
+!    LREORDER: switch to reorder spectral coefficients or not
+!    LGRADIENT: switch to compute or not gradient
+!    PSPEC: spectral coefficient array
+!    PGPT: grid-point field
+!    PGPTM: N-S derivative if LGRADIENT
+!    PGPTL: E-W derivative if LGRADIENT
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    6 Jan., S. Riette: w_spec_setup interface modified
+!    March, 2016, A.Mary: LREORDER
+!    Sept., 2016, A.Mary: LGRADIENT
+!
+! I. Dummy arguments declaration
+USE PARKIND1, ONLY : JPRB
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER(KIND=8), INTENT(IN) :: KSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KTRUNC
+INTEGER(KIND=8), INTENT(IN) :: KNUMMAXRESOL
+INTEGER(KIND=8), INTENT(IN) :: KGPTOT
+INTEGER(KIND=8), INTENT(IN) :: KSLOEN
+INTEGER(KIND=8), DIMENSION(KSLOEN), INTENT(IN) :: KLOEN
+INTEGER(KIND=8), INTENT(IN) :: KSIZE
+LOGICAL, INTENT(IN) :: LGRADIENT
+LOGICAL, INTENT(IN) :: LREORDER
+REAL(KIND=8), DIMENSION(KSIZE),  INTENT(IN)  :: PSPEC
+REAL(KIND=8), DIMENSION(KGPTOT), INTENT(OUT) :: PGPT
+REAL(KIND=8), DIMENSION(KGPTOT), INTENT(OUT) :: PGPTM
+REAL(KIND=8), DIMENSION(KGPTOT), INTENT(OUT) :: PGPTL
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(SIZE(KLOEN)) :: ILOEN
+INTEGER :: ISIZEI, ISIZEJ, &
+         & IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+         & ITRUNCX, ITRUNCY, &
+         & INUMMAXRESOL
+LOGICAL :: LLSTOP
+INTEGER :: IIDENTRESOL
+INTEGER :: JI, JM, JN
+INTEGER, DIMENSION(0:KTRUNC) :: NASM0
+REAL(KIND=8), DIMENSION(1, KSIZE) :: ZSPBUF
+REAL(KIND=JPRB), DIMENSION(KGPTOT, 3, 1) :: ZGPBUF
+REAL(KIND=8) :: ZDELTAX, ZDELTAY
+#include "trans_inq.h"
+#include "inv_trans.h"
+
+ILOEN(:)=KLOEN(:)
+ISIZEI=0
+ISIZEJ=KSIZEJ
+IPHYSICALSIZEI=0
+IPHYSICALSIZEJ=0
+ITRUNCX=KTRUNC
+ITRUNCY=0
+INUMMAXRESOL=KNUMMAXRESOL
+!
+! III. Setup
+ZDELTAX=0.
+ZDELTAY=0.
+CALL W_SPEC_SETUP(KRETURNCODE, ISIZEI, ISIZEJ, IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+                  &ITRUNCX, ITRUNCY, INUMMAXRESOL, ILOEN, .FALSE., SIZE(ILOEN), &
+                  &ZDELTAX, ZDELTAY, IIDENTRESOL, LLSTOP)
+!
+! IV. Transformation
+IF (LREORDER) THEN
+  ! IV.a Shape of coefficient array
+  IF (.NOT. LLSTOP) THEN
+    JI=1
+    DO JN=0, KTRUNC
+      NASM0(JN)=JI
+      JI=JI+1+JN+(JN+1)
+    ENDDO
+  ENDIF
+
+  ! IV.b Reordering
+  IF(.NOT. LLSTOP) THEN
+    ZSPBUF(1,:)=0.
+    JI=1
+    DO JM=0, KTRUNC
+      DO JN=JM, KTRUNC
+        ZSPBUF(1,JI)=PSPEC(NASM0(JN)+JM)
+        JI=JI+1
+        IF(JM==0) THEN
+          ZSPBUF(1,JI)=0
+        ELSE
+          ZSPBUF(1,JI)=PSPEC(NASM0(JN)-JM)
+        ENDIF
+        JI=JI+1
+      ENDDO
+    ENDDO
+  ENDIF
+ELSE
+  ZSPBUF(1,:) = PSPEC(:)
+ENDIF
+
+! IV.c Inverse transform
+IF (.NOT. LLSTOP) THEN
+  IF (.NOT. LGRADIENT) THEN
+    CALL INV_TRANS(PSPSCALAR=REAL(ZSPBUF(:,:),KIND=JPRB), PGP=ZGPBUF(:,:,:), KRESOL=IIDENTRESOL)
+    PGPT(:)=REAL(ZGPBUF(:,1,1),KIND=8)
+  ELSE
+    CALL INV_TRANS(PSPSCALAR=REAL(ZSPBUF(:,:),KIND=JPRB), PGP=ZGPBUF(:,:,:), KRESOL=IIDENTRESOL, LDSCDERS=.TRUE.)
+    PGPT(:)=REAL(ZGPBUF(:,1,1),KIND=8)
+    PGPTM(:)=REAL(ZGPBUF(:,2,1),KIND=8)
+    PGPTL(:)=REAL(ZGPBUF(:,3,1),KIND=8)
+  ENDIF
+ENDIF
+END SUBROUTINE W_SPEC2GPT_GAUSS
+
+!______________________________________________________________________
+
+SUBROUTINE W_GPT2SPEC_LAM(KRETURNCODE, KSIZE, KSIZEI, KSIZEJ, KPHYSICALSIZEI, KPHYSICALSIZEJ, &
+                         &KTRUNCX, KTRUNCY, KNUMMAXRESOL, PDELTAX, PDELTAY, LREORDER, PGPT, PSPEC)
+! ** PURPOSE
+!    Transform grid point values into spectral coefficients
+!
+! ** DUMMY ARGUMENTS
+!    KRETURNCODE: error code
+!    KSIZE: size of spectral field
+!    KSIZEI, KSIZEJ: size of grid-point field (with extension zone)
+!    KPHYSICALSIZEI, KPHYSICALSIZEJ: size of physical part of grid-point field
+!    KTRUNCX, KTRUNCY: troncatures
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    PDELTAX: x resolution
+!    PDELTAY: y resolution
+!    LREORDER: switch to reorder spectral coefficients or not
+!    PGPT: grid-point field
+!    PSPEC: spectral coefficient array
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    6 Jan., S. Riette: PDELTAX and PDELTAY added
+!    March, 2016, A.Mary: LREORDER
+!
+! I. Dummy arguments declaration
+USE PARKIND1, ONLY : JPRB
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER(KIND=8), INTENT(IN) :: KSIZE, KSIZEI, KSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KPHYSICALSIZEI, KPHYSICALSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KTRUNCX, KTRUNCY
+INTEGER(KIND=8), INTENT(IN) :: KNUMMAXRESOL
+REAL(KIND=8), INTENT(IN) :: PDELTAX
+REAL(KIND=8), INTENT(IN) :: PDELTAY
+LOGICAL, INTENT(IN) :: LREORDER
+REAL(KIND=8), DIMENSION(KSIZEI*KSIZEJ), INTENT(IN) :: PGPT
+REAL(KIND=8), DIMENSION(KSIZE), INTENT(OUT) :: PSPEC
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(0:KTRUNCX) :: IESM0
+INTEGER :: IGPTOT, ISPEC
+INTEGER, DIMENSION(0:KTRUNCY) :: ISPECINI, ISPECEND
+REAL(KIND=JPRB), DIMENSION(1, KSIZEI*KSIZEJ) :: ZSPBUF !size over-evaluated
+REAL(KIND=JPRB), DIMENSION(KSIZEI*KSIZEJ, 1, 1) :: ZGPBUF
+INTEGER :: JI, JM, JN, IIDENTRESOL
+LOGICAL :: LLSTOP
+INTEGER :: ISIZEI, ISIZEJ, &
+         & IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+         & ITRUNCX, ITRUNCY, &
+         & INUMMAXRESOL
+INTEGER, DIMENSION(1) :: ILOEN
+
+#include "edir_trans.h"
+#include "etrans_inq.h"
+
+KRETURNCODE=0
+LLSTOP=.FALSE.
+ISIZEI=KSIZEI
+ISIZEJ=KSIZEJ
+IPHYSICALSIZEI=KPHYSICALSIZEI
+IPHYSICALSIZEJ=KPHYSICALSIZEJ
+ITRUNCX=KTRUNCX
+ITRUNCY=KTRUNCY
+INUMMAXRESOL=KNUMMAXRESOL
+
+! III. Setup
+CALL W_SPEC_SETUP(KRETURNCODE, ISIZEI, ISIZEJ, IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+                  &ITRUNCX, ITRUNCY, INUMMAXRESOL, ILOEN, .TRUE., 1, &
+                  &PDELTAX, PDELTAY, IIDENTRESOL, LLSTOP)
+
+! IV. Transformation
+
+! IV.a Shape of coefficient array
+!IGPTOT is the total number of points in grid-point space
+!ISPEC is the number of spectral coefficients
+!IESM0(m) is the index of spectral coefficient (m,0) in model
+!ISPECINI(n) is the index of the first of the 4 spectral coefficient (0,n) in FA file
+!ISPECEND(n) is the index of the last of the last 4 spectral coefficients (:,n) in FA file
+IF (.NOT. LLSTOP) THEN
+  CALL ETRANS_INQ(KRESOL=IIDENTRESOL, KGPTOT=IGPTOT, KSPEC=ISPEC, KESM0=IESM0)
+  JI=1
+  DO JN=0, ITRUNCY
+    ISPECINI(JN)=(JI-1)*4+1
+    JI=JI+COUNT(IESM0(1:ITRUNCX)-IESM0(0:ITRUNCX-1)>JN*4)
+    IF (ISPEC-IESM0(ITRUNCX)>JN*4) JI=JI+1
+    ISPECEND(JN)=(JI-1)*4
+  ENDDO
+ENDIF
+
+! III.b transform
+IF (.NOT. LLSTOP) THEN
+  ZGPBUF(:,1,1)=REAL(PGPT(:),KIND=JPRB)
+  CALL EDIR_TRANS(PSPSCALAR=ZSPBUF(:,:), PGP=ZGPBUF(:,:,:), KRESOL=IIDENTRESOL)
+ENDIF
+
+! III.c Reordering
+! reorder Aladin :  file ordering = coeffs per blocks of m, 4 reals per coeff
+!           Aladin array ordering = coeffs per blocks of n, 4 reals per coeff
+IF (LREORDER) THEN
+  IF (.NOT. LLSTOP) THEN
+    JI=1
+    PSPEC(:)=0.
+    DO JM=0,ITRUNCX*4+4,4
+      DO JN=0,ITRUNCY
+        IF (ISPECINI(JN)+JM+3<=ISPECEND(JN)) THEN
+          PSPEC(ISPECINI(JN)+JM:ISPECINI(JN)+JM+3) = REAL(ZSPBUF(1,JI:JI+3),KIND=8)
+          JI=JI+4
+        ENDIF
+      ENDDO
+    ENDDO
+    IF(JI/=ISPEC+1) THEN
+      PRINT*, "Internal error in W_GPT2SPEC_LAM (spectral reordering)"
+      KRETURNCODE=-999
+    ENDIF
+  ENDIF
+ELSE
+  PSPEC(1:KSIZE) = REAL(ZSPBUF(1,1:KSIZE),KIND=8)
+ENDIF
+
+END SUBROUTINE W_GPT2SPEC_LAM
+
+!____________________________________________________________________________
+
+SUBROUTINE W_GPT2SPEC_GAUSS(KRETURNCODE, KSPEC, KSIZEJ, KTRUNC, KNUMMAXRESOL, KSLOEN, KLOEN, KSIZE, LREORDER, PGPT, PSPEC)
+! ** PURPOSE
+!    Transform spectral coefficients into grid-point values
+!
+! ** DUMMY ARGUMENTS
+!    KRETURNCODE: error code
+!    KSPEC: size of spectral coefficients array
+!    KSIZEJ: Number of latitudes
+!    KTRUNC: troncature
+!    KNUMMAXRESOL: maximum number of troncatures handled
+!    KSLOEN: Size ok KLOEN
+!    KLOEN
+!    KSIZE: Size of PGPT
+!    LREORDER: switch to reorder spectral coefficients or not
+!    PGPT: grid-point field
+!    PSPEC: spectral coefficient array
+!
+! ** AUTHOR
+!    9 April 2014, S. Riette
+!
+! ** MODIFICATIONS
+!    6 Jan. 2016, S. Riette: w_spec_setup interface modified
+!    March, 2016, A.Mary: LREORDER
+!
+! I. Dummy arguments declaration
+USE PARKIND1, ONLY : JPRB
+IMPLICIT NONE
+INTEGER(KIND=8), INTENT(OUT) :: KRETURNCODE
+INTEGER(KIND=8), INTENT(IN) :: KSPEC
+INTEGER(KIND=8), INTENT(IN) :: KSIZEJ
+INTEGER(KIND=8), INTENT(IN) :: KTRUNC
+INTEGER(KIND=8), INTENT(IN) :: KNUMMAXRESOL
+INTEGER(KIND=8), INTENT(IN) :: KSLOEN
+INTEGER(KIND=8), DIMENSION(KSLOEN), INTENT(IN) :: KLOEN
+INTEGER(KIND=8), INTENT(IN) :: KSIZE
+LOGICAL, INTENT(IN) :: LREORDER
+REAL(KIND=8), DIMENSION(KSIZE), INTENT(IN) :: PGPT
+REAL(KIND=8), DIMENSION(KSPEC), INTENT(OUT) :: PSPEC
+!
+! II. Local variables declaration
+INTEGER, DIMENSION(SIZE(KLOEN)) :: ILOEN
+INTEGER :: ISIZEI, ISIZEJ, &
+         & IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+         & ITRUNCX, ITRUNCY, &
+         & INUMMAXRESOL
+LOGICAL :: LLSTOP
+INTEGER :: IIDENTRESOL
+INTEGER :: JI, JM, JN
+INTEGER, DIMENSION(0:KTRUNC) :: NASM0
+REAL(KIND=JPRB), DIMENSION(1, SIZE(PGPT)) :: ZSPBUF !size over-evaluated
+REAL(KIND=JPRB), DIMENSION(SIZE(PGPT), 1, 1) :: ZGPBUF
+REAL(KIND=8) :: ZDELTAX, ZDELTAY
+
+#include "trans_inq.h"
+#include "dir_trans.h"
+KRETURNCODE=0
+ILOEN(:)=KLOEN(:)
+ISIZEI=0
+ISIZEJ=KSIZEJ
+IPHYSICALSIZEI=0
+IPHYSICALSIZEJ=0
+ITRUNCX=KTRUNC
+ITRUNCY=0
+INUMMAXRESOL=KNUMMAXRESOL
+!
+! III. Setup
+ZDELTAX=0.
+ZDELTAY=0.
+CALL W_SPEC_SETUP(KRETURNCODE, ISIZEI, ISIZEJ, IPHYSICALSIZEI, IPHYSICALSIZEJ, &
+                  &ITRUNCX, ITRUNCY, INUMMAXRESOL, ILOEN, .FALSE., SIZE(ILOEN), &
+                  &ZDELTAX, ZDELTAY, IIDENTRESOL, LLSTOP)
+!
+! IV. Transformation
+! IV.a Shape of coefficient array
+IF (.NOT. LLSTOP) THEN
+  JI=1
+  DO JN=0, KTRUNC
+    NASM0(JN)=JI
+    JI=JI+1+JN+(JN+1)
+  ENDDO
+ENDIF
+
+! IV.b Direct transform
+IF (.NOT. LLSTOP) THEN
+  ZGPBUF(:,1,1)=REAL(PGPT(:),KIND=JPRB)
+  CALL DIR_TRANS(PSPSCALAR=ZSPBUF(:,:), PGP=ZGPBUF(:,:,:), KRESOL=IIDENTRESOL)
+ENDIF
+
+! IV.c Reordering
+IF (LREORDER) THEN
+  IF(.NOT. LLSTOP) THEN
+    PSPEC(:)=0.
+    JI=1
+    DO JM=0, KTRUNC
+      DO JN=JM, KTRUNC
+        PSPEC(NASM0(JN)+JM)=REAL(ZSPBUF(1,JI),KIND=8)
+        JI=JI+1
+        IF(JM/=0) THEN
+          PSPEC(NASM0(JN)-JM)=REAL(ZSPBUF(1,JI),KIND=8)
+        ENDIF
+        JI=JI+1
+      ENDDO
+    ENDDO
+    IF(JI-1/=KSPEC) THEN
+      PRINT*, "Internal error in W_GPT2SPEC_GAUSS (spectral reordering)"
+      KRETURNCODE=-999
+    ENDIF
+  ENDIF
+ELSE
+  PSPEC(1:KSPEC) = REAL(ZSPBUF(1,1:KSPEC),KIND=8)
+ENDIF
+
+END SUBROUTINE W_GPT2SPEC_GAUSS
+
+SUBROUTINE W_SPEC2GPT_FFT1D(KSIZES, KTRUNC, PSPEC, KSIZEG, PGPT)
+! ** PURPOSE
+!    Transform spectral coefficients into grid-point values,
+!    for a 1D array (vertical section academic model)
+!
+! ** DUMMY ARGUMENTS
+!    KSIZES size of PSPEC
+!    KTRUNC: troncature
+!    PSPEC: spectral coefficient array
+!    KSIZEG: size of grid-point field (with extension zone)
+!    PGPT: grid-point field
+!
+! ** AUTHOR
+!    26 March 2015, A. Mary, from utilities/pinuts/module/fa_datas_mod.F90
+!
+! ** MODIFICATIONS
+!
+! I. Dummy arguments declaration
+IMPLICIT NONE
+
+INTEGER(KIND=8), INTENT(IN) :: KSIZES
+INTEGER(KIND=8), INTENT(IN) :: KTRUNC
+REAL(KIND=8), DIMENSION(KSIZES), INTENT(IN) :: PSPEC
+INTEGER(KIND=8), INTENT(IN) :: KSIZEG
+REAL(KIND=8), DIMENSION(KSIZEG), INTENT(OUT) :: PGPT
+
+INTEGER(KIND=8) :: NSEFRE, NFTM, NDGLSUR
+REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: SP2, TRIGSE
+INTEGER(KIND=8), DIMENSION(:), ALLOCATABLE  :: NFAXE
+INTEGER(KIND=8), PARAMETER :: NZERO=0
+
+NDGLSUR = KSIZEG+MOD(KSIZEG,2)+2
+NFTM    = 2*(KTRUNC+1)
+ALLOCATE(SP2(NDGLSUR*NFTM))
+SP2     = 0.0
+SP2     = CONVRT2FFT(PSPEC,NZERO,KTRUNC,NDGLSUR)
+ALLOCATE(NFAXE(1:10))
+ALLOCATE(TRIGSE(1:KSIZEG)) 
+CALL SET99(TRIGSE,NFAXE,KSIZEG)
+CALL FFT992(SP2(1:KSIZEG), TRIGSE, NFAXE, 1, NDGLSUR, KSIZEG, 1, 1)
+DEALLOCATE(TRIGSE)
+DEALLOCATE(NFAXE)
+PGPT(:) = SP2(1:KSIZEG)
+
+CONTAINS
+
+! from utilities/pinuts/module/fa_datas_mod.F90
+! and utilities/pinuts/module/array_lib_mod.F90
+
+FUNCTION CONVRT2FFT(IN,X,Y,N) RESULT(OU)
+REAL(KIND=8),DIMENSION(:),INTENT(IN)      :: IN
+INTEGER(KIND=8),INTENT(IN)                       :: X, Y, N
+REAL(KIND=8),DIMENSION(N*2*(X+1))         :: OU
+
+INTEGER(KIND=8),DIMENSION(2*(X+1),(N/2))         :: MINQ 
+INTEGER(KIND=8),DIMENSION((N/2),2*(X+1))         :: TMINQ 
+REAL(KIND=8),DIMENSION(2*(X+1),(N/2))     :: OMINQ, EMINQ
+REAL(KIND=8),DIMENSION((N/2),2*(X+1))     :: TOMINQ, TEMINQ   
+REAL(KIND=8),DIMENSION(N*(X+1))           :: OINI, EINI
+REAL(KIND=8), PARAMETER                   :: ZZERO=0.0
+
+CALL SPLIT_ODEV(IN,OINI,EINI)
+MINQ   = MASQ(X,Y,N)
+OMINQ  = UNPACK(OINI,MINQ == 1,ZZERO)
+TOMINQ = TRANSPOSE(OMINQ)
+EMINQ  = UNPACK(EINI,MINQ == 1,ZZERO)
+TEMINQ = TRANSPOSE(EMINQ)
+TMINQ  = 1
+OINI   = PACK(TOMINQ,TMINQ > 0)
+EINI   = PACK(TEMINQ,TMINQ > 0)
+OU     = MIX_ODEV(OINI,EINI)
+END FUNCTION CONVRT2FFT
+
+FUNCTION MASQ(X,Y,N) RESULT(T)
+INTEGER(KIND=8),INTENT(IN)                       :: X, Y, N
+INTEGER(KIND=8),DIMENSION(1:2*(X+1),1:(N/2))     :: T
+
+INTEGER(KIND=8)                                  :: I, J
+INTEGER(KIND=8),DIMENSION(0:X)                   :: KM
+INTEGER(KIND=8),DIMENSION(0:Y)                   :: KN
+CALL ELLIPS64(X,Y,KN,KM) 
+T = 0
+DO I=0,Y
+  DO J=0,2*KN(I)+1
+    T(J+1,I+1)=1
+  END DO
+END DO
+END FUNCTION MASQ
+
+FUNCTION MIX_ODEV(TO,TE) RESULT(T)
+REAL(KIND=8),DIMENSION(:),INTENT(IN)        :: TO,TE
+REAL(KIND=8),DIMENSION(SIZE(TO)+SIZE(TE))   :: T
+
+INTEGER(KIND=8) :: I
+
+DO I=1,(SIZE(TO)+SIZE(TE))/2
+  T((2*I)-1)=TE(I)
+  T(2*I)=TO(I)
+END DO
+END FUNCTION MIX_ODEV
+
+SUBROUTINE SPLIT_ODEV(T,TO,TE)
+REAL(KIND=8),DIMENSION(:),INTENT(IN)          :: T
+REAL(KIND=8),DIMENSION(SIZE(T)/2),INTENT(OUT) :: TO,TE
+
+INTEGER(KIND=8) :: I
+
+DO I=1,SIZE(T)/2
+  TO(I)=T(2*I)
+  TE(I)=T((2*I)-1)
+END DO
+END SUBROUTINE SPLIT_ODEV
+
+END SUBROUTINE W_SPEC2GPT_FFT1D

@@ -35,6 +35,10 @@ ecbuild_add_option( FEATURE SINGLE_PRECISION
                     DEFAULT ON
                     DESCRIPTION "Support for Single Precision" )
 
+ecbuild_add_option( FEATURE EPYGRAM
+                    DEFAULT ON
+		    DESCRIPTION "Add Wrappers for Epygram " )
+
 if( HAVE_SINGLE_PRECISION )
   set( single "single" )
 endif()
@@ -61,7 +65,7 @@ ecbuild_add_option( FEATURE TRANSI
                     CONDITION HAVE_DOUBLE_PRECISION )
 
 ecbuild_add_option( FEATURE ETRANS
-                    DEFAULT OFF
+	            DEFAULT ON
                     DESCRIPTION "Include Limited-Area-Model Transforms" )
 
 ectrans_find_lapack()

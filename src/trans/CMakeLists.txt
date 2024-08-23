@@ -45,6 +45,12 @@ if( NOT HAVE_FFTW )
   ecbuild_list_exclude_pattern( LIST trans_src REGEX tpm_fftw.F90 )
 endif()
 
+
+if( HAVE_EPYGRAM )
+	ecbuild_list_add_pattern( LIST trans_src  GLOB ${CMAKE_SOURCE_DIR}/src/py_interface/* )
+endif()
+
+
 set( HAVE_dp ${HAVE_DOUBLE_PRECISION} )
 set( HAVE_sp ${HAVE_SINGLE_PRECISION} )
 
