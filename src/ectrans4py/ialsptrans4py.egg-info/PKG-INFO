@@ -1,7 +1,0 @@
-Metadata-Version: 2.1
-Name: ialsptrans4py
-Version: 0.0.1
-License-File: LICENSE
-License-File: AUTHORS
-Requires-Dist: numpy
-Requires-Dist: ctypesforfortran
