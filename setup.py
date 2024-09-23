@@ -9,6 +9,6 @@ setup(
 #    cmake_install_dir="src/ectrans4py/ialsptrans4py",
     cmake_install_dir="src/ectrans4py",
     setup_requires=["scikit-build", "setuptools"],
-    install_requires=["numpy==1.23.0", "ctypesforfortran==1.1.3"],  # Add other Python dependencies here
+    install_requires=["numpy", "ctypesforfortran==1.1.3"],  # Add other Python dependencies here
 )
 
