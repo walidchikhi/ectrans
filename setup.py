@@ -2,7 +2,7 @@ from skbuild import setup
 
 setup(
     name="ectrans4py",
-    version="1.0.0",
+    version="2.0.0",
     packages=['ectrans4py'],
     cmake_minimum_required_version="3.13",
     package_dir={"": "src"},
