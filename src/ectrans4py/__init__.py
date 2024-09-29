@@ -20,6 +20,9 @@ import ctypesForFortran
 from ctypesForFortran import addReturnCode, treatReturnCode, IN, OUT
 
 
+
+__version__ = "2.0.0"
+
 # Shared objects library
 ########################
 shared_objects_library = os.environ.get('IALSPTRANS4PY_SO', None)
