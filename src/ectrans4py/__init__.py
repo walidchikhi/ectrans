@@ -28,6 +28,8 @@ if shared_objects_library is None or not os.path.exists(shared_objects_library):
     so_basename = "IALsptrans4py.so.0"  # local name in the directory
     LD_LIBRARY_PATH = [p for p in os.environ.get('LD_LIBRARY_PATH', '').split(':') if p != '']
     potential_locations = LD_LIBRARY_PATH + [
+            os.path.join(os.path.dirname(os.path.realpath(__file__)), 'lib'),   # FIXEME : but requiere changes in CMakeLists.txt
+        os.path.join(os.path.dirname(os.path.realpath(__file__)), 'lib64'),     # force one libdir directory name ! 
         "/home/common/epygram/public/EPyGrAM/libs4py",  # CNRM
         "/home/gmap/mrpe/mary/public/EPyGrAM/libs4py",  # belenos/taranis
         "/home/acrd/public/EPyGrAM/libs4py",  # ECMWF's Atos aa-ad
